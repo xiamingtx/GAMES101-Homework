@@ -85,6 +85,31 @@ Eigen::Matrix4f get_projection_matrix(float eye_fov, float aspect_ratio, float z
     return projection;
 }
 
+Eigen::Matrix4f get_rotation(Eigen::Vector3f axis, float angle)
+{
+    // Create the cross product matrix  K
+    Eigen::Matrix3f K;
+    K << 0, -axis.z(), axis.y(),
+        axis.z(), 0, -axis.x(),
+        -axis.y(), axis.x(), 0;
+
+    // Calculate cosine and sine of rotation angle
+    const float theta = DEG2RAD(angle);
+    const float cosTheta = cos(theta);
+    const float sinTheta = sin(theta);
+
+    // Create the Rotation Matrix R = cos(θ) * I + sin(θ) * K + (1−cos(θ))(k*k.t())
+    // Reference: Rodrigues' rotation formula
+    Eigen::Matrix3f I = Eigen::Matrix3f::Identity();
+    Eigen::Matrix3f R = cosTheta * I + sinTheta * K + (1 - cosTheta) * axis * axis.transpose();
+
+    // expand the 3x3 rotation matrix to 4x4 transform matrix
+    Eigen::Matrix4f transform = Eigen::Matrix4f::Identity();
+    transform.block<3, 3>(0, 0) = R;
+
+    return transform;
+}
+
 int main(int argc, const char **argv)
 {
     float angle = 0;
@@ -115,11 +140,14 @@ int main(int argc, const char **argv)
     int key = 0;
     int frame_count = 0;
 
+    // Eigen::Vector3f axis(0, 0, 1);
+
     if (command_line)
     {
         r.clear(rst::Buffers::Color | rst::Buffers::Depth);
 
         r.set_model(get_model_matrix(angle));
+        // r.set_model(get_rotation(axis, angle));
         r.set_view(get_view_matrix(eye_pos));
         r.set_projection(get_projection_matrix(45, 1, 0.1, 50));
 
@@ -138,6 +166,7 @@ int main(int argc, const char **argv)
         r.clear(rst::Buffers::Color | rst::Buffers::Depth);
 
         r.set_model(get_model_matrix(angle));
+        // r.set_model(get_rotation(axis, angle));
         r.set_view(get_view_matrix(eye_pos));
         r.set_projection(get_projection_matrix(45, 1, 0.1, 50));
 
@@ -149,6 +178,7 @@ int main(int argc, const char **argv)
         key = cv::waitKey(10);
 
         std::cout << "frame count: " << frame_count++ << '\n';
+        std::clog << "angle: " << angle << std::endl;
 
         if (key == 'a')
         {
