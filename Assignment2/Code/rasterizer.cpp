@@ -4,7 +4,7 @@
  * @Author: xm
  * @Date: 2020-03-03 11:13:18
  * @LastEditors: xm
- * @LastEditTime: 2024-06-14 19:49:17
+ * @LastEditTime: 2024-06-14 23:29:04
  */
 // clang-format off
 //
@@ -101,7 +101,10 @@ void rst::rasterizer::draw(pos_buf_id pos_buffer, ind_buf_id ind_buffer, col_buf
         };
         //Homogeneous division
         for (auto& vec : v) {
-            vec /= vec.w();
+            // vec /= vec.w();
+            vec.x() /= vec.w();
+            vec.y() /= vec.w();
+            vec.z() /= vec.w();
         }
         //Viewport transformation
         for (auto & vert : v)
@@ -192,7 +195,7 @@ void rst::rasterizer::rasterize_triangle(const Triangle& t) {
                     //float z_interpolated = alpha * v[0].z() / v[0].w() + beta * v[1].z() / v[1].w() + gamma * v[2].z() / v[2].w();
                     //z_interpolated *= w_reciprocal;
                     auto[alpha, beta, gamma] = computeBarycentric2D(x + 0.5, y + 0.5, t.v);
-                    float w_reciprocal = 1.0/(alpha / v[0].w() + beta / v[1].w() + gamma / v[2].w());
+                    float w_reciprocal = 1.0 / (alpha / v[0].w() + beta / v[1].w() + gamma / v[2].w());
                     float z_interpolated = alpha * v[0].z() / v[0].w() + beta * v[1].z() / v[1].w() + gamma * v[2].z() / v[2].w();
                     z_interpolated *= w_reciprocal;
 
