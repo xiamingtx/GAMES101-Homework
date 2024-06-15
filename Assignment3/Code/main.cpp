@@ -118,6 +118,8 @@ Eigen::Vector3f texture_fragment_shader(const fragment_shader_payload &payload)
     if (payload.texture)
     {
         // TODO: Get the texture value at the texture coordinates of the current fragment
+        // return_color = payload.texture->getColor(payload.tex_coords.x(), payload.tex_coords.y());
+        return_color = payload.texture->getColorBilinear(payload.tex_coords.x(), payload.tex_coords.y());
     }
     Eigen::Vector3f texture_color;
     texture_color << return_color.x(), return_color.y(), return_color.z();
@@ -144,7 +146,21 @@ Eigen::Vector3f texture_fragment_shader(const fragment_shader_payload &payload)
     for (auto &light : lights)
     {
         // TODO: For each light source in the code, calculate what the *ambient*, *diffuse*, and *specular*
+        Eigen::Vector3f light_dir = (light.position - point).normalized(); // Calculate direction to light
+        Eigen::Vector3f view_dir = (eye_pos - point).normalized();         // Calculate viewer direction
+        Eigen::Vector3f half_vector = (view_dir + light_dir).normalized(); // Calculate half vector for Blinn-Phong specular
+        // Ambient component
+        Eigen::Vector3f ambient = ka.cwiseProduct(amb_light_intensity);
+
+        float dist_square = (light.position - point).squaredNorm(); // light attenuation
+        // Diffuse component
+        float diff = std::max(0.0f, normal.dot(light_dir));
+        Eigen::Vector3f diffuse = diff * kd.cwiseProduct(light.intensity / dist_square);
+        // Specular component
+        float spec = std::pow(std::max(0.0f, normal.dot(half_vector)), p);
+        Eigen::Vector3f specular = spec * ks.cwiseProduct(light.intensity / dist_square);
         // components are. Then, accumulate that result on the *result_color* object.
+        result_color += (ambient + diffuse + specular);
     }
 
     return result_color * 255.f;
@@ -152,18 +168,34 @@ Eigen::Vector3f texture_fragment_shader(const fragment_shader_payload &payload)
 
 Eigen::Vector3f phong_fragment_shader(const fragment_shader_payload &payload)
 {
-    Eigen::Vector3f ka = Eigen::Vector3f(0.005, 0.005, 0.005);
-    Eigen::Vector3f kd = payload.color;
-    Eigen::Vector3f ks = Eigen::Vector3f(0.7937, 0.7937, 0.7937);
+    // Blinn-Phong model mainly consists of three components: Ambient, Diffuse, and Specular
+    // 1. Ambient light is a constant lighting that simulates the indirect illumination
+    // of an object by a light source, ensuring that objects are not completely in darkness
+    // even when there is no direct light source.
+    // 2. Diffuse reflection refers to the phenomenon of light reflecting evenly in all
+    // directions after hitting a rough surface. The intensity of diffuse reflection is
+    // proportional to the cosine of the angle between the direction of the incident light
+    // and the surface normal, reflecting Lambert's law of cosines.
+    // 3. Specular reflection simulates the highlight produced when light hits a smooth surface.
+    // In the Phong model, this is accomplished by computing the higher power of the dot product
+    // of the reflected light vector and the observer's line of sight vector.
+    // The Blinn-Phong model uses a half vector, which is the unitized average vector of the
+    // light source direction vector and the sight direction vector. The strength of the
+    // specular reflection is determined by raising the dot product of the normal vector and
+    // the half vector to a higher power, which usually requires less computation and
+    // provides similar visual results.
+    Eigen::Vector3f ka = Eigen::Vector3f(0.005, 0.005, 0.005);    // Ambient light coefficient
+    Eigen::Vector3f kd = payload.color;                           // Diffuse reflection coefficient
+    Eigen::Vector3f ks = Eigen::Vector3f(0.7937, 0.7937, 0.7937); // Specular reflection coefficient
 
     auto l1 = light{{20, 20, 20}, {500, 500, 500}};
     auto l2 = light{{-20, 20, 0}, {500, 500, 500}};
 
     std::vector<light> lights = {l1, l2};
-    Eigen::Vector3f amb_light_intensity{10, 10, 10};
-    Eigen::Vector3f eye_pos{0, 0, 10};
+    Eigen::Vector3f amb_light_intensity{10, 10, 10}; // Ambient light intensity
+    Eigen::Vector3f eye_pos{0, 0, 10};               // Observer's position
 
-    float p = 150;
+    float p = 150; // Shininess factor for specular highlight
 
     Eigen::Vector3f color = payload.color;
     Eigen::Vector3f point = payload.view_pos;
@@ -173,7 +205,21 @@ Eigen::Vector3f phong_fragment_shader(const fragment_shader_payload &payload)
     for (auto &light : lights)
     {
         // TODO: For each light source in the code, calculate what the *ambient*, *diffuse*, and *specular*
+        Eigen::Vector3f light_dir = (light.position - point).normalized(); // Calculate direction to light
+        Eigen::Vector3f view_dir = (eye_pos - point).normalized();         // Calculate viewer direction
+        Eigen::Vector3f half_vector = (view_dir + light_dir).normalized(); // Calculate half vector for Blinn-Phong specular
+        // Ambient component
+        Eigen::Vector3f ambient = ka.cwiseProduct(amb_light_intensity);
+
+        float dist_square = (light.position - point).squaredNorm(); // light attenuation
+        // Diffuse component
+        float diff = std::max(0.0f, normal.dot(light_dir));
+        Eigen::Vector3f diffuse = diff * kd.cwiseProduct(light.intensity / dist_square);
+        // Specular component
+        float spec = std::pow(std::max(0.0f, normal.dot(half_vector)), p);
+        Eigen::Vector3f specular = spec * ks.cwiseProduct(light.intensity / dist_square);
         // components are. Then, accumulate that result on the *result_color* object.
+        result_color += (ambient + diffuse + specular);
     }
 
     return result_color * 255.f;
@@ -211,13 +257,56 @@ Eigen::Vector3f displacement_fragment_shader(const fragment_shader_payload &payl
     // Vector ln = (-dU, -dV, 1)
     // Position p = p + kn * n * h(u,v)
     // Normal n = normalize(TBN * ln)
+    // extract coordinates of normal
+    float x = normal.x();
+    float y = normal.y();
+    float z = normal.z();
+
+    Eigen::Vector3f t = Eigen::Vector3f(x * y / std::sqrt(x * x + z * z), std::sqrt(x * x + z * z), z * y / std::sqrt(x * x + z * z));
+    Eigen::Vector3f b = normal.cross(t);
+
+    Eigen::Matrix3f TBN;
+    TBN << t.x(), b.x(), normal.x(),
+        t.y(), b.y(), normal.y(),
+        t.z(), b.z(), normal.z();
+
+    float u = payload.tex_coords.x();
+    float v = payload.tex_coords.y();
+    float w = payload.texture->width;
+    float h = payload.texture->height;
+
+    // float dU = kh * kn * (payload.texture->getColor(u + 1.0f / w, v).norm() - payload.texture->getColor(u, v).norm());
+    // float dV = kh * kn * (payload.texture->getColor(u, v + 1.0f / h).norm() - payload.texture->getColor(u, v).norm());
+    float dU = kh * kn * (payload.texture->getColorBilinear(u + 1.0f / w, v).norm() - payload.texture->getColorBilinear(u, v).norm());
+    float dV = kh * kn * (payload.texture->getColorBilinear(u, v + 1.0f / h).norm() - payload.texture->getColorBilinear(u, v).norm());
+
+    Eigen::Vector3f ln = Eigen::Vector3f(-dU, -dV, 1.0f);
+
+    // point += (kn * normal * payload.texture->getColor(u, v).norm());
+    point += (kn * normal * payload.texture->getColorBilinear(u, v).norm());
+
+    normal = (TBN * ln).normalized();
 
     Eigen::Vector3f result_color = {0, 0, 0};
 
     for (auto &light : lights)
     {
         // TODO: For each light source in the code, calculate what the *ambient*, *diffuse*, and *specular*
+        Eigen::Vector3f light_dir = (light.position - point).normalized(); // Calculate direction to light
+        Eigen::Vector3f view_dir = (eye_pos - point).normalized();         // Calculate viewer direction
+        Eigen::Vector3f half_vector = (view_dir + light_dir).normalized(); // Calculate half vector for Blinn-Phong specular
+        // Ambient component
+        Eigen::Vector3f ambient = ka.cwiseProduct(amb_light_intensity);
+
+        float dist_square = (light.position - point).squaredNorm(); // light attenuation
+        // Diffuse component
+        float diff = std::max(0.0f, normal.dot(light_dir));
+        Eigen::Vector3f diffuse = diff * kd.cwiseProduct(light.intensity / dist_square);
+        // Specular component
+        float spec = std::pow(std::max(0.0f, normal.dot(half_vector)), p);
+        Eigen::Vector3f specular = spec * ks.cwiseProduct(light.intensity / dist_square);
         // components are. Then, accumulate that result on the *result_color* object.
+        result_color += (ambient + diffuse + specular);
     }
 
     return result_color * 255.f;
@@ -225,7 +314,8 @@ Eigen::Vector3f displacement_fragment_shader(const fragment_shader_payload &payl
 
 Eigen::Vector3f bump_fragment_shader(const fragment_shader_payload &payload)
 {
-
+    // Bump Mapping creates the visual illusion of a more complex surface by modifying the
+    // surface's normals to simulate subtle bumps and textures.
     Eigen::Vector3f ka = Eigen::Vector3f(0.005, 0.005, 0.005);
     Eigen::Vector3f kd = payload.color;
     Eigen::Vector3f ks = Eigen::Vector3f(0.7937, 0.7937, 0.7937);
@@ -254,6 +344,36 @@ Eigen::Vector3f bump_fragment_shader(const fragment_shader_payload &payload)
     // dV = kh * kn * (h(u,v+1/h)-h(u,v))
     // Vector ln = (-dU, -dV, 1)
     // Normal n = normalize(TBN * ln)
+
+    // extract coordinates of normal
+    float x = normal.x();
+    float y = normal.y();
+    float z = normal.z();
+    // calculate Tangent t and Bitangent b
+    Eigen::Vector3f t = Eigen::Vector3f(x * y / std::sqrt(x * x + z * z), std::sqrt(x * x + z * z), z * y / std::sqrt(x * x + z * z));
+    Eigen::Vector3f b = normal.cross(t);
+
+    // The TBN matrix is ​​mainly used to convert vectors defined in tangent space (such as
+    // normal vectors in normal maps) to model space or world space. This allows locally defined
+    // details such as normal perturbations to be applied to the lighting and rendering process
+    // of the entire model.
+    Eigen::Matrix3f TBN;
+    TBN << t.x(), b.x(), normal.x(),
+        t.y(), b.y(), normal.y(),
+        t.z(), b.z(), normal.z();
+
+    float u = payload.tex_coords.x();
+    float v = payload.tex_coords.y();
+    float w = payload.texture->width;
+    float h = payload.texture->height;
+
+    // float dU = kh * kn * (payload.texture->getColor(u + 1.0f / w, v).norm() - payload.texture->getColor(u, v).norm());
+    // float dV = kh * kn * (payload.texture->getColor(u, v + 1.0f / h).norm() - payload.texture->getColor(u, v).norm());
+    float dU = kh * kn * (payload.texture->getColorBilinear(u + 1.0f / w, v).norm() - payload.texture->getColorBilinear(u, v).norm());
+    float dV = kh * kn * (payload.texture->getColorBilinear(u, v + 1.0f / h).norm() - payload.texture->getColorBilinear(u, v).norm());
+
+    Eigen::Vector3f ln = Eigen::Vector3f(-dU, -dV, 1.0f);
+    normal = (TBN * ln).normalized();
 
     Eigen::Vector3f result_color = {0, 0, 0};
     result_color = normal;
