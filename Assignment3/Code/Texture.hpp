@@ -4,7 +4,7 @@
  * @Author: xm
  * @Date: 2020-03-04 12:51:24
  * @LastEditors: xm
- * @LastEditTime: 2024-06-15 15:35:09
+ * @LastEditTime: 2024-06-15 18:02:58
  */
 //
 // Created by LEI XU on 4/27/19.
@@ -52,41 +52,30 @@ public:
     Eigen::Vector3f getColorBilinear(float u, float v)
     {
         // Limit the range of u and v coordinate values ​​to the [0,1] interval
-        if (u < 0)
-            u = 0;
-        if (u > 1)
-            u = 1;
-        if (v < 0)
-            v = 0;
-        if (v > 1)
-            v = 1;
+        u = std::clamp(u, 0.0f, 1.0f);
+        v = std::clamp(v, 0.0f, 1.0f);
 
         // transfer texture coords to image coords
         float u_img = u * width;
         float v_img = (1 - v) * height;
 
-        // Calculate the nearest four pixel coordinates
-        int u0 = std::floor(u_img);
-        int u1 = std::min(u0 + 1, width - 1);
-        int v0 = std::floor(v_img);
-        int v1 = std::min(v0 + 1, height - 1);
+        // calculate neighbor pixels
+        float u0 = std::max(0.0, floor(u_img - 0.5)), u1 = std::min(1.0, floor(u_img + 0.5));
+        float v0 = std::max(0.0, floor(v_img - 0.5)), v1 = std::min(1.0, floor(v_img + 0.5));
 
-        // Calculate s and t, which are the relative positions from u0 to u1 and v0 to v1
-        float s = u_img - u0;
-        float t = v_img - v0;
+        cv::Vec3b color00 = image_data.at<cv::Vec3b>(v0, u0);
+        cv::Vec3b color01 = image_data.at<cv::Vec3b>(v0, u1);
+        cv::Vec3b color10 = image_data.at<cv::Vec3b>(v1, u0);
+        cv::Vec3b color11 = image_data.at<cv::Vec3b>(v1, u1);
 
-        // Get the colors of the surrounding four pixels
-        auto color00 = image_data.at<cv::Vec3b>(v0, u0);
-        auto color01 = image_data.at<cv::Vec3b>(v0, u1);
-        auto color10 = image_data.at<cv::Vec3b>(v1, u0);
-        auto color11 = image_data.at<cv::Vec3b>(v1, u1);
+        // interpolate
+        float s = (u_img - u0) / (u1 - u0);
+        float t = (v_img - v0) / (v1 - v0);
 
-        // Perform linear interpolation in the u direction
-        auto color0 = color00 * (1 - s) + color01 * s;
-        auto color1 = color10 * (1 - s) + color11 * s;
+        cv::Vec3f color0 = color00 + s * (color01 - color00);
+        cv::Vec3f color1 = color10 + s * (color11 - color10);
+        cv::Vec3f color = color0 + t * (color1 - color0);
 
-        // Perform linear interpolation in the v direction
-        auto color = color0 * (1 - t) + color1 * t;
         return Eigen::Vector3f(color[0], color[1], color[2]);
     }
 };
