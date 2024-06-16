@@ -206,8 +206,7 @@ Vector3f castRay(
                 Vector3f reflectionDirection = reflect(-lightDir, N);
 
                 specularColor += powf(std::max(0.f, -dotProduct(reflectionDirection, dir)),
-                                      payload->hit_obj->specularExponent) *
-                                 light->intensity;
+                                    payload->hit_obj->specularExponent) * light->intensity;
             }
 
             hitColor = lightAmt * payload->hit_obj->evalDiffuseColor(st) * payload->hit_obj->Kd + specularColor * payload->hit_obj->Ks;

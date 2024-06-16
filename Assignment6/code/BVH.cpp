@@ -26,6 +26,7 @@ BVHAccel::BVHAccel(std::vector<Object*> p, int maxPrimsInNode, SplitMethod split
 
 BVHBuildNode* BVHAccel::recursiveBuild(std::vector<Object*> objects)
 {
+    // init root node
     BVHBuildNode* node = new BVHBuildNode();
 
     // Compute bounds of all primitives in BVH node
@@ -49,10 +50,11 @@ BVHBuildNode* BVHAccel::recursiveBuild(std::vector<Object*> objects)
     }
     else {
         Bounds3 centroidBounds;
-        for (int i = 0; i < objects.size(); ++i)
-            centroidBounds =
-                Union(centroidBounds, objects[i]->getBounds().Centroid());
+        for (int i = 0; i < objects.size(); ++ i)
+            centroidBounds = Union(centroidBounds, objects[i]->getBounds().Centroid());
+        // Select the axis with the largest range and divide the child nodes
         int dim = centroidBounds.maxExtent();
+        // Sort by centroid position
         switch (dim) {
         case 0:
             std::sort(objects.begin(), objects.end(), [](auto f1, auto f2) {
@@ -70,20 +72,66 @@ BVHBuildNode* BVHAccel::recursiveBuild(std::vector<Object*> objects)
             });
             break;
         }
-
+        // recursion
         auto beginning = objects.begin();
         auto middling = objects.begin() + (objects.size() / 2);
         auto ending = objects.end();
 
-        auto leftshapes = std::vector<Object*>(beginning, middling);
-        auto rightshapes = std::vector<Object*>(middling, ending);
+        if (splitMethod == SplitMethod::SAH)
+        {
+            const int bucket_num = 10;
+            const float travCost = 0.125f;
+            const float interCost = 1.0f;
+            int minBucketIndex = 0;
+            float minCost = std::numeric_limits<float>::infinity();
+            float sa = centroidBounds.SurfaceArea();
+            for (int i = 0; i < bucket_num; ++ i) 
+            {
+                auto beginning = objects.begin();
+                auto middling = objects.begin() + (objects.size()  * i / bucket_num);
+                auto ending = objects.end();
+                auto leftShapes = std::vector<Object*>(beginning, middling);
+                auto rightShapes = std::vector<Object*>(middling, ending);
 
-        assert(objects.size() == (leftshapes.size() + rightshapes.size()));
+                // Bounds of leftShapes & rightShapes 
+                Bounds3 leftBounds, rightBounds;
+                for (int k = 0; k < leftShapes.size(); ++ k)
+                    leftBounds = Union(leftBounds, leftShapes[k]->getBounds().Centroid());
+                for (int k = 0; k < rightShapes.size(); ++ k)
+                    rightBounds = Union(rightBounds, rightShapes[k]->getBounds().Centroid());
+                float leftSa = leftBounds.SurfaceArea(), rightSa = rightBounds.SurfaceArea();
+                float cost = travCost + (leftShapes.size() * leftSa + rightShapes.size() * rightSa) / sa;
+                if (cost < minCost) 
+                {
+                    minBucketIndex = i;
+                    minCost = cost;
+                }
+            }
+            auto beginning = objects.begin();
+            auto middling = objects.begin() + (objects.size() * minBucketIndex/  bucket_num);
+            auto ending = objects.end();
+            auto leftShapes = std::vector<Object*>(beginning, middling);
+            auto rightShapes = std::vector<Object*>(middling, ending);
 
-        node->left = recursiveBuild(leftshapes);
-        node->right = recursiveBuild(rightshapes);
+            assert(objects.size() == (leftShapes.size() + rightShapes.size()));
 
-        node->bounds = Union(node->left->bounds, node->right->bounds);
+            node->left = recursiveBuild(leftShapes);
+            node->right = recursiveBuild(rightShapes);
+
+            node->bounds = Union(node->left->bounds, node->right->bounds);
+        }
+        else
+        {
+            auto leftShapes = std::vector<Object*>(beginning, middling);
+            auto rightShapes = std::vector<Object*>(middling, ending);
+
+            assert(objects.size() == (leftShapes.size() + rightShapes.size()));
+
+            node->left = recursiveBuild(leftShapes);
+            node->right = recursiveBuild(rightShapes);
+
+            node->bounds = Union(node->left->bounds, node->right->bounds);
+        }
     }
 
     return node;
