@@ -4,7 +4,7 @@
  * @Author: xm
  * @Date: 2020-03-23 22:25:26
  * @LastEditors: xm
- * @LastEditTime: 2024-06-15 22:22:34
+ * @LastEditTime: 2024-06-16 15:12:26
  */
 #pragma once
 
@@ -22,6 +22,7 @@ bool rayTriangleIntersect(const Vector3f &v0, const Vector3f &v1, const Vector3f
     // origin is *orig* and direction is *dir*)
     // Also don't forget to update tnear, u and v.
 
+    // Moller-Trumbore algorithm
     const Vector3f E1 = v1 - v0;
     const Vector3f E2 = v2 - v0;
     const Vector3f S = orig - v0;
@@ -64,7 +65,7 @@ public:
     }
 
     bool intersect(const Vector3f &orig, const Vector3f &dir, float &tnear, uint32_t &index,
-                   Vector2f &uv) const override
+                Vector2f &uv) const override
     {
         bool intersect = false;
         for (uint32_t k = 0; k < numTriangles; ++k)
