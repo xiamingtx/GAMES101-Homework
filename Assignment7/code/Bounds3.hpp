@@ -11,8 +11,8 @@
 
 class Bounds3
 {
-public:
-    Vector3f pMin, pMax; // two points to specify the bounding box (left-bottom and right-top)
+  public:
+    Vector3f pMin, pMax; // two points to specify the bounding box
     Bounds3()
     {
         double minNum = std::numeric_limits<double>::lowest();
@@ -50,7 +50,7 @@ public:
     {
         return Bounds3(Vector3f(fmax(pMin.x, b.pMin.x), fmax(pMin.y, b.pMin.y),
                                 fmax(pMin.z, b.pMin.z)),
-                        Vector3f(fmin(pMax.x, b.pMax.x), fmin(pMax.y, b.pMax.y),
+                       Vector3f(fmin(pMax.x, b.pMax.x), fmin(pMax.y, b.pMax.y),
                                 fmin(pMax.z, b.pMax.z)));
     }
 
@@ -85,7 +85,7 @@ public:
     }
 
     inline bool IntersectP(const Ray& ray, const Vector3f& invDir,
-                            const std::array<int, 3>& dirisNeg) const;
+                           const std::array<int, 3>& dirisNeg) const;
 };
 
 
@@ -96,7 +96,6 @@ inline bool Bounds3::IntersectP(const Ray& ray, const Vector3f& invDir,
     // invDir: ray direction(x,y,z), invDir=(1.0/x,1.0/y,1.0/z), use this because Multiply is faster that Division
     // dirIsNeg: ray direction(x,y,z), dirIsNeg=[int(x>0),int(y>0),int(z>0)], use this to simplify your logic
     // TODO test if ray bound intersects
-
     // Calculate the time ray enters and exits bound in x, y, z direction
     Vector3f tMin = (pMin - ray.origin) * invDir, tMax = (pMax - ray.origin) * invDir;
     // Ensure tMin denotes entry time, and tMax denotes exit time from Bound
