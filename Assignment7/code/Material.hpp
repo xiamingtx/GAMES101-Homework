@@ -234,7 +234,7 @@ Vector3f Material::eval(const Vector3f &wi, const Vector3f &wo, const Vector3f &
                     specular= Vector3f(1);
                 else
                     specular = F *G * D / divisor;
-                return diffuse+specular;
+                return diffuse + specular;
             }
             else 
                 return Vector3f(0.0f);
